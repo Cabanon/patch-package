@@ -4,6 +4,8 @@ version = "0.1.2"
 description = "Automatically generate and apply patches to fix installed packages"
 authors = ["Cabanon <mathias.cabanne@gmail.com>"]
 readme = "README.md"
+repository = "https://github.com/Cabanon/patch-package"
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^2.7 || ^3.5"
