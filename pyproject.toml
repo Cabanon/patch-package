@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "patch-package"
+version = "0.1.2"
+description = "Automatically generate and apply patches to fix installed packages"
+authors = ["Cabanon <mathias.cabanne@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^2.7 || ^3.5"
+patch = "^1.16"
+future = "^1.0.0"
+pathlib2 = "^2.3.7.post1"
+backports-tempfile = "^1.0"
+importlib-metadata = "*"
+
+[tool.poetry.scripts]
+patch-package = "patch_package:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
