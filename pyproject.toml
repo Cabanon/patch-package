@@ -11,9 +11,9 @@ license = "MIT"
 python = "^2.7 || ^3.5"
 patch = "^1.16"
 future = "^1.0.0"
-pathlib2 = "^2.3.7.post1"
-backports-tempfile = "^1.0"
-importlib-metadata = "*"
+pathlib2 = { "version" = "^2.3.0", python = "^2.7" }
+backports-tempfile = { "version" = "^1.0", python = "^2.7" }
+importlib-metadata = { "version" = "*", python = "<3.8" }
 
 [tool.poetry.scripts]
 patch-package = "patch_package:main"

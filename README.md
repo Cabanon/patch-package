@@ -19,12 +19,23 @@ Install the library from PyPI
     pip install patch-package
 
 Make a change in one of your installed package and then generate the corresponding patch
-    
+
     patch-package <package-name>
 
 Then when reinstalling the package you can apply back your patches
-    
+
     patch-package
 
 All patches are contained in the *patches/* folder so it can be commited to git and reapply whenever you want
 
+## Development
+
+Make sure you have pyenv installed.
+
+Install the tox library
+
+    pip install tox
+
+Run tests
+
+    tox

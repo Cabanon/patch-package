@@ -14,16 +14,24 @@ from difflib import unified_diff, get_close_matches
 from itertools import chain
 import logging
 import argparse
-import collections
+from collections import defaultdict
 
-from pathlib2 import Path
-from importlib_metadata import files, version, distributions, PackageNotFoundError
-from backports.tempfile import TemporaryDirectory
+if sys.version_info < (3,):
+    from pathlib2 import Path
+    from backports.tempfile import TemporaryDirectory
+else:
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+if sys.version_info < (3, 8):
+    from importlib_metadata import files, version, distributions, PackageNotFoundError
+else:
+    from importlib.metadata import files, version, distributions, PackageNotFoundError
+
 import patch
 
 
 def packages_distributions():
-    pkg_to_dist = collections.defaultdict(list)
+    pkg_to_dist = defaultdict(list) #type: defaultdict[str, list[str]]
     for dist in distributions():
         for pkg in (dist.read_text("top_level.txt") or "").split():
             pkg_to_dist[pkg].append(dist.metadata["Name"])
@@ -40,7 +48,7 @@ last_log = ""
 logging.getLogger("patch").addHandler(PatchHandler())
 
 
-def match(name):
+def match(name): #type: (str) -> list[str] | None
     dists = packages_distributions()
     if name in dists:
         return dists[name]
@@ -52,7 +60,7 @@ def match(name):
         return dists[pkg_matches[0]]
 
 
-def main(args=None):
+def main(args = None): #type: (list[str] | None) -> None
     with TemporaryDirectory() as temp_dir:
         patch_dir = Path("patches")
 
@@ -64,23 +72,23 @@ def main(args=None):
             nargs="?",
             help="The name of the package to create a patch for",
         )
-        args = parser.parse_args(args)
+        parsed = parser.parse_args(args)
 
-        if args.package_name:
+        if parsed.package_name:
             try:
-                package_version = version(args.package_name)
+                package_version = version(parsed.package_name)
                 print(
                     "Found installed version %s in current environment."
                     % package_version
                 )
             except PackageNotFoundError:
-                print("Package %s not found." % args.package_name)
-                matches = match(args.package_name)
+                print("Package %s not found." % parsed.package_name)
+                matches = match(parsed.package_name)
                 if matches:
                     print("Did you mean %s ?" % " or ".join(matches))
                 exit()
 
-            package = "==".join((args.package_name, version(args.package_name)))
+            package = "==".join((parsed.package_name, version(parsed.package_name)))
             print("Retrieving %s from PyPI..." % package)
             with open(os.devnull, "w") as DEVNULL:
                 subprocess.check_call(
@@ -101,7 +109,7 @@ def main(args=None):
 
             print("Comparing files...")
             output = ""
-            for file in files(args.package_name):
+            for file in files(parsed.package_name):
                 if file.parent.suffix != ".dist-info" and file.suffix != ".pyc":
                     patched_lines = file.read_text().splitlines(True)
                     original_lines = (
@@ -123,6 +131,11 @@ def main(args=None):
                 print("Writing patch file...")
                 patch_dir.mkdir(exist_ok=True)
                 output_file = patch_dir / (package + ".patch")
+                if output_file.exists():
+                    print('Patch file already exists, would you like to overwrite it ? (y/n)')
+                    if input().lower() != 'y':
+                        print("Aborted")
+                        exit()
                 output_file.write_text(output)
                 print("Done.")
             else:
@@ -150,7 +163,7 @@ def main(args=None):
 
                 patchset = patch.fromfile(str(patch_file))
                 package_site = site.getsitepackages()[0]
-                if not patchset.apply(root=package_site):
+                if patchset and not patchset.apply(root=package_site):
                     if "source file is different" in last_log:
                         source_file = last_log[29:-1]
                         print(
@@ -160,7 +173,7 @@ def main(args=None):
                         print("Please recreate or fix your patch. Skipping...")
                         continue
                 else:
-                    print("Patch applied successfully")
+                    print("Patch applied successfully.")
 
 
 if __name__ == "__main__":
