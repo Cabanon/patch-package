@@ -90,11 +90,14 @@ def main(args = None): #type: (list[str] | None) -> None
 
             package = "==".join((parsed.package_name, version(parsed.package_name)))
             print("Retrieving %s from PyPI..." % package)
+            try:
+                version("pip")
+                executable = [sys.executable, "-m"]
+            except PackageNotFoundError:
+                executable = ["uv", "tool", "run"]
             with open(os.devnull, "w") as DEVNULL:
                 subprocess.check_call(
-                    [
-                        sys.executable,
-                        "-m",
+                    executable + [
                         "pip",
                         "install",
                         package,
@@ -111,9 +114,12 @@ def main(args = None): #type: (list[str] | None) -> None
             output = ""
             for file in files(parsed.package_name):
                 if file.parent.suffix != ".dist-info" and file.suffix != ".pyc":
-                    patched_lines = file.read_text().splitlines(True)
+                    try:
+                        patched_lines = file.read_text(encoding='utf-8').splitlines(True)
+                    except UnicodeDecodeError:
+                        continue
                     original_lines = (
-                        (Path(temp_dir) / str(file)).read_text().splitlines(True)
+                        (Path(temp_dir) / str(file)).read_text(encoding='utf-8').splitlines(True)
                     )
                     diff = list(
                         unified_diff(
@@ -136,7 +142,7 @@ def main(args = None): #type: (list[str] | None) -> None
                     if input().lower() != 'y':
                         print("Aborted")
                         exit()
-                output_file.write_text(output)
+                output_file.write_text(output, encoding='utf-8')
                 print("Done.")
             else:
                 print("No changes detected. No patch created.")
