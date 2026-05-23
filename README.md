@@ -30,12 +30,8 @@ All patches are contained in the _patches/_ folder so it can be commited to git 
 
 ## Development
 
-Make sure you have pyenv installed.
+Install the library in editable mode
 
-Install the tox library
+    uv pip install -e .
 
-    pip install tox
-
-Run tests
-
-    tox
+Do whatever modifications you want and file a pull request, thanks !
