@@ -1,54 +1,35 @@
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from future import standard_library
+from __future__ import absolute_import, division, print_function, unicode_literals
 
-standard_library.install_aliases()
-
-import os
-import subprocess
-import site
-import sys
-from difflib import unified_diff, get_close_matches
-from itertools import chain
-import logging
 import argparse
-from collections import defaultdict
+import os
+import shutil
+import subprocess
+import sys
+import sysconfig
+from difflib import get_close_matches, unified_diff
+from itertools import chain
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-if sys.version_info < (3,):
-    from pathlib2 import Path
-    from backports.tempfile import TemporaryDirectory
+import whatthepatch
+
+if sys.version_info < (3, 11):
+    from importlib_metadata import (
+        PackageNotFoundError,
+        files,
+        packages_distributions,
+        version,
+    )
 else:
-    from pathlib import Path
-    from tempfile import TemporaryDirectory
-if sys.version_info < (3, 8):
-    from importlib_metadata import files, version, distributions, PackageNotFoundError
-else:
-    from importlib.metadata import files, version, distributions, PackageNotFoundError
-
-import patch
+    from importlib.metadata import (
+        PackageNotFoundError,
+        files,
+        packages_distributions,
+        version,
+    )
 
 
-def packages_distributions():
-    pkg_to_dist = defaultdict(list) #type: defaultdict[str, list[str]]
-    for dist in distributions():
-        for pkg in (dist.read_text("top_level.txt") or "").split():
-            pkg_to_dist[pkg].append(dist.metadata["Name"])
-    return dict(pkg_to_dist)
-
-
-class PatchHandler(logging.StreamHandler):
-    def emit(self, record):
-        global last_log
-        last_log = record.getMessage()
-
-
-last_log = ""
-logging.getLogger("patch").addHandler(PatchHandler())
-
-
-def match(name): #type: (str) -> list[str] | None
+def match(name):
     dists = packages_distributions()
     if name in dists:
         return dists[name]
@@ -60,7 +41,7 @@ def match(name): #type: (str) -> list[str] | None
         return dists[pkg_matches[0]]
 
 
-def main(args = None): #type: (list[str] | None) -> None
+def main(args=None):
     with TemporaryDirectory() as temp_dir:
         patch_dir = Path("patches")
 
@@ -85,26 +66,25 @@ def main(args = None): #type: (list[str] | None) -> None
                 print("Package %s not found." % parsed.package_name)
                 matches = match(parsed.package_name)
                 if matches:
-                    print("Did you mean %s ?" % " or ".join(matches))
-                exit()
+                    raise Exception("Did you mean %s ?" % " or ".join(matches))
 
             package = "==".join((parsed.package_name, version(parsed.package_name)))
             print("Retrieving %s from PyPI..." % package)
-            try:
-                version("pip")
-                executable = [sys.executable, "-m"]
-            except PackageNotFoundError:
-                executable = ["uv", "tool", "run"]
             with open(os.devnull, "w") as DEVNULL:
+                if shutil.which("uv"):
+                    pip = ["uv", "pip"]
+                else:
+                    subprocess.check_call([sys.executable, "-m", "ensurepip"])
+                    pip = [sys.executable, "-m", "pip"]
                 subprocess.check_call(
-                    executable + [
-                        "pip",
+                    [
+                        *pip,
                         "install",
                         package,
                         "--target",
                         temp_dir,
                         "--no-deps",
-                        "--upgrade",
+                        "--no-cache",
                     ],
                     stdout=DEVNULL,
                     stderr=DEVNULL,
@@ -115,11 +95,18 @@ def main(args = None): #type: (list[str] | None) -> None
             for file in files(parsed.package_name):
                 if file.parent.suffix != ".dist-info" and file.suffix != ".pyc":
                     try:
-                        patched_lines = file.read_text(encoding='utf-8').splitlines(True)
+                        patched_lines = file.read_text(encoding="utf-8").splitlines(
+                            True
+                        )
                     except UnicodeDecodeError:
+                        print(
+                            "Ignoring file %s because it is not UTF-8 encoded." % file
+                        )
                         continue
                     original_lines = (
-                        (Path(temp_dir) / str(file)).read_text(encoding='utf-8').splitlines(True)
+                        Path(temp_dir, file)
+                        .read_text(encoding="utf-8")
+                        .splitlines(True)
                     )
                     diff = list(
                         unified_diff(
@@ -138,23 +125,21 @@ def main(args = None): #type: (list[str] | None) -> None
                 patch_dir.mkdir(exist_ok=True)
                 output_file = patch_dir / (package + ".patch")
                 if output_file.exists():
-                    print('Patch file already exists, would you like to overwrite it ? (y/n)')
-                    if input().lower() != 'y':
-                        print("Aborted")
-                        exit()
-                output_file.write_text(output, encoding='utf-8')
+                    print(
+                        "Patch file already exists, would you like to overwrite it ? (y/n)"
+                    )
+                    if input().lower() != "y":
+                        raise Exception("Aborted")
+                output_file.write_text(output)
                 print("Done.")
             else:
                 print("No changes detected. No patch created.")
-
         else:
             if not patch_dir.exists() or not any(patch_dir.iterdir()):
-                print("No patches to apply. Exiting...")
-                exit()
+                raise Exception("No patches to apply. Exiting...")
             for patch_file in patch_dir.glob("*.patch"):
                 package_name, package_version = patch_file.stem.split("==")
                 print("Applying patch for package %s..." % package_name)
-
                 try:
                     installed_version = version(package_name)
                 except PackageNotFoundError:
@@ -167,20 +152,21 @@ def main(args = None): #type: (list[str] | None) -> None
                     )
                     continue
 
-                patchset = patch.fromfile(str(patch_file))
-                package_site = site.getsitepackages()[0]
-                if patchset and not patchset.apply(root=package_site):
-                    if "source file is different" in last_log:
-                        source_file = last_log[29:-1]
-                        print(
-                            "Invalid patch for package %s because %s is different from the patch source."
-                            % (package_name, Path(package_site) / source_file)
-                        )
-                        print("Please recreate or fix your patch. Skipping...")
-                        continue
-                else:
-                    print("Patch applied successfully.")
+                package_site = sysconfig.get_path("purelib")
+                for diff in whatthepatch.parse_patch(patch_file.read_text()):
+                    target = Path(package_site, diff.header.new_path)
+                    if not target.exists():
+                        raise Exception(f"Patch target not found: {target}")
+                    original = target.read_text(encoding="utf-8")
+                    patched = whatthepatch.apply_diff(diff, original)
+                    if patched[-1]:
+                        patched.append("")
+                    target.write_text("\n".join(patched), encoding="utf-8")
 
 
-if __name__ == "__main__":
-    main()
+def cli():
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)

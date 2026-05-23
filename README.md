@@ -7,10 +7,10 @@
 
 ## Features
 
-* Compatible with Python 2.7 and Python 3.5+
-* Automatic code change detection between installed package and package source from pip
-* Prevent patching when version or code are mismatching
-* Automatic matching between import names and package names (e.g. yaml -> PyYAML) and fuzzy matching (e.g. request -> requests)
+- Compatible with Python 3.8+
+- Automatic code change detection between installed package and package source from pip
+- Prevent patching when version or code are mismatching
+- Automatic matching between import names and package names (e.g. yaml -> PyYAML) and fuzzy matching (e.g. request -> requests)
 
 ## Usage
 
@@ -26,7 +26,7 @@ Then when reinstalling the package you can apply back your patches
 
     patch-package
 
-All patches are contained in the *patches/* folder so it can be commited to git and reapply whenever you want
+All patches are contained in the _patches/_ folder so it can be commited to git and reapply whenever you want
 
 ## Development
 

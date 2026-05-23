@@ -1,23 +1,23 @@
-[tool.poetry]
+[project]
 name = "patch-package"
-version = "0.1.2"
+version = "0.1.3"
 description = "Automatically generate and apply patches to fix installed packages"
-authors = ["Cabanon <mathias.cabanne@gmail.com>"]
 readme = "README.md"
+requires-python = ">=3"
+authors = [{ name = "Cabanon", email = "mathias.cabanne@gmail.com" }]
+dependencies = [
+  "future>=1.0.0,<2.0.0",
+  "importlib-metadata; python_version < '3.11'",
+  "unidiff>=0.7.5",
+  "whatthepatch>=1.0.2",
+]
+
+[project.urls]
 repository = "https://github.com/Cabanon/patch-package"
-license = "MIT"
 
-[tool.poetry.dependencies]
-python = "^2.7 || ^3.5"
-patch = "^1.16"
-future = "^1.0.0"
-pathlib2 = { "version" = "^2.3.0", python = "^2.7" }
-backports-tempfile = { "version" = "^1.0", python = "^2.7" }
-importlib-metadata = { "version" = "*", python = "<3.8" }
-
-[tool.poetry.scripts]
-patch-package = "patch_package:main"
+[project.scripts]
+patch-package = "patch_package:cli"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
