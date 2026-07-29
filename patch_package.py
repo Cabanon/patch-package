@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 import argparse
 import os
 import shutil
@@ -11,9 +9,9 @@ from itertools import chain
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import whatthepatch
+from unidiff import PatchSet
 
-if sys.version_info < (3, 11):
+if sys.version_info < (3, 10):
     from importlib_metadata import (
         PackageNotFoundError,
         files,
@@ -59,20 +57,19 @@ def main(args=None):
             try:
                 package_version = version(parsed.package_name)
                 print(
-                    "Found installed version %s in current environment."
-                    % package_version
+                    f"Found installed version {package_version} in current environment."
                 )
             except PackageNotFoundError:
-                print("Package %s not found." % parsed.package_name)
+                print(f"Package {parsed.package_name} not found.")
                 matches = match(parsed.package_name)
                 if matches:
-                    raise Exception("Did you mean %s ?" % " or ".join(matches))
+                    raise Exception(f"Did you mean {' or '.join(matches)} ?")
 
             package = "==".join((parsed.package_name, version(parsed.package_name)))
-            print("Retrieving %s from PyPI..." % package)
+            print(f"Retrieving {package} from PyPI...")
             with open(os.devnull, "w") as DEVNULL:
                 if shutil.which("uv"):
-                    pip = ["uv", "pip"]
+                    pip = ["uv", "tool", "run", "pip"]
                 else:
                     subprocess.check_call([sys.executable, "-m", "ensurepip"])
                     pip = [sys.executable, "-m", "pip"]
@@ -93,32 +90,27 @@ def main(args=None):
             print("Comparing files...")
             output = ""
             for file in files(parsed.package_name):
-                if file.parent.suffix != ".dist-info" and file.suffix != ".pyc":
-                    try:
-                        patched_lines = file.read_text(encoding="utf-8").splitlines(
-                            True
-                        )
-                    except UnicodeDecodeError:
-                        print(
-                            "Ignoring file %s because it is not UTF-8 encoded." % file
-                        )
-                        continue
-                    original_lines = (
-                        Path(temp_dir, file)
-                        .read_text(encoding="utf-8")
-                        .splitlines(True)
+                if file.suffix != ".py":
+                    continue
+                try:
+                    patched_lines = file.read_text(encoding="utf-8").splitlines(True)
+                except UnicodeDecodeError:
+                    print(f"Ignoring file {file} because it is not UTF-8 encoded.")
+                    continue
+                original_lines = (
+                    Path(temp_dir, file).read_text(encoding="utf-8").splitlines(True)
+                )
+                diff = list(
+                    unified_diff(
+                        original_lines,
+                        patched_lines,
+                        fromfile=str(file),
+                        tofile=str(file),
                     )
-                    diff = list(
-                        unified_diff(
-                            original_lines,
-                            patched_lines,
-                            fromfile=str(file),
-                            tofile=str(file),
-                        )
-                    )
-                    if diff:
-                        print("Changes detected in file %s." % file)
-                        output += "".join(diff)
+                )
+                if diff:
+                    print(f"Changes detected in file {file}.")
+                    output += "".join(diff)
 
             if output:
                 print("Writing patch file...")
@@ -139,29 +131,49 @@ def main(args=None):
                 raise Exception("No patches to apply. Exiting...")
             for patch_file in patch_dir.glob("*.patch"):
                 package_name, package_version = patch_file.stem.split("==")
-                print("Applying patch for package %s..." % package_name)
+                print(f"Applying patch for package {package_name}...")
                 try:
                     installed_version = version(package_name)
                 except PackageNotFoundError:
-                    print("Package %s not found. Skipping..." % package_name)
+                    print(f"Package {package_name} not found. Skipping...")
                     continue
                 if package_version != installed_version:
                     print(
-                        "Mismatching versions (%s and %s) %s not found. Skipping..."
-                        % (installed_version, package_version, package_name)
+                        f"Mismatching versions ({installed_version} and {package_version}) for package {package_name}. Skipping..."
                     )
                     continue
 
                 package_site = sysconfig.get_path("purelib")
-                for diff in whatthepatch.parse_patch(patch_file.read_text()):
-                    target = Path(package_site, diff.header.new_path)
+                for patch in PatchSet(patch_file.read_text()):
+                    target = Path(package_site, patch.source_file)
                     if not target.exists():
                         raise Exception(f"Patch target not found: {target}")
-                    original = target.read_text(encoding="utf-8")
-                    patched = whatthepatch.apply_diff(diff, original)
-                    if patched[-1]:
-                        patched.append("")
-                    target.write_text("\n".join(patched), encoding="utf-8")
+                    lines = target.read_text(encoding="utf-8").splitlines(True)
+                    offset = 0
+                    for hunk in patch:
+                        i = hunk.source_start - 1 + offset
+                        for line in hunk:
+                            if line.is_context:
+                                if i < len(lines) and lines[i] == line.value:
+                                    i += 1
+                                else:
+                                    raise Exception(
+                                        f"Context mismatch at {target}:{i + 1}\n"
+                                        f"Expected: {line.value!r}\n"
+                                        f"Found:    {lines[i]!r}"
+                                    )
+                            elif line.is_removed:
+                                if i < len(lines) and lines[i] == line.value:
+                                    del lines[i]
+                                    offset -= 1
+                            elif line.is_added:
+                                if i < len(lines) and lines[i] == line.value:
+                                    i += 1
+                                else:
+                                    lines.insert(i, line.value)
+                                    i += 1
+                                    offset += 1
+                    target.write_text("".join(lines), encoding="utf-8")
 
 
 def cli():

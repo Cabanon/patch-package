@@ -1,19 +1,8 @@
-# type: ignore
-from __future__ import absolute_import, division, print_function, unicode_literals
-
-from future import standard_library
-
-standard_library.install_aliases()
-
 import site
 import subprocess
 import sys
 import unittest
-
-if sys.version_info < (3,):
-    from pathlib2 import Path
-else:
-    from pathlib import Path
+from pathlib import Path
 
 from patch_package import main, match
 
@@ -40,6 +29,11 @@ class PatchTest(unittest.TestCase):
         )
         self.assertEqual(test_file.read_text(), "".join(original_lines))
         main()
+        print("=======")
+        print(test_file.read_text())
+        print("=======")
+        print("".join(modified_lines))
+        print("=======")
         self.assertEqual(test_file.read_text(), "".join(modified_lines))
 
     def test_pkg_match(self):
@@ -56,7 +50,7 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(match("classes"), ["jaraco.classes"])
 
     def test_fuzzy_match(self):
-        self.assertEqual(match("post"), ["future"])
+        self.assertEqual(match("certify"), ["certifi"])
 
     def tearDown(self):
         subprocess.check_call(

@@ -3,13 +3,11 @@ name = "patch-package"
 version = "0.1.3"
 description = "Automatically generate and apply patches to fix installed packages"
 readme = "README.md"
-requires-python = ">=3"
+requires-python = ">=3.8"
 authors = [{ name = "Cabanon", email = "mathias.cabanne@gmail.com" }]
 dependencies = [
-  "future>=1.0.0,<2.0.0",
-  "importlib-metadata; python_version < '3.11'",
+  'importlib-metadata>=4.6; python_version < "3.10"',
   "unidiff>=0.7.5",
-  "whatthepatch>=1.0.2",
 ]
 
 [project.urls]
@@ -17,6 +15,11 @@ repository = "https://github.com/Cabanon/patch-package"
 
 [project.scripts]
 patch-package = "patch_package:cli"
+
+[dependency-groups]
+lint = [
+  "ruff>=0.0.17",
+]
 
 [build-system]
 requires = ["hatchling"]
